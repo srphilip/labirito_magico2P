@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Labirinto Matemágico</title>
+  <style>
+    :root{
+      --bg:#FAF7F0; --card:#FFFFFF; --accent:#FF9AA2; --accent2:#FFB7B2; --text:#333;
+      --tile:8; --gap:6px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0}
+    body{font-family: 'Segoe UI', Roboto, Arial; background:linear-gradient(180deg,#FDF6E3,#FFF); color:var(--text); display:flex; align-items:flex-start; justify-content:center}
+    .app{width:100%; max-width:1400px; padding:18px; display:flex; flex-direction:column; gap:12px; min-height:100vh}
+    header{display:flex; align-items:center; gap:18px}
+    .logo{width:74px; height:74px; border-radius:20px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:36px; box-shadow:0 6px 14px rgba(0,0,0,0.08)}
+    h1{font-size:20px; margin:0}
+    .meta{font-size:13px; color:#555}
+
+    .board-card{background:var(--card); padding:12px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.06); flex:1; display:flex; flex-direction:column}
+    #game-area{display:flex; gap:14px; align-items:flex-start; flex:1}
+
+    .viewport{background:linear-gradient(180deg,#FFF,#F8FBFF); padding:8px; border-radius:10px; display:flex; align-items:center; justify-content:center}
+    canvas{background:transparent; display:block; border-radius:8px; touch-action: none; -ms-touch-action: none;} /* touch-action none to handle swipes */
+
+    /* sidebar */
+    .side{width:300px; min-width:220px}
+    .stat{display:flex; gap:8px; align-items:center; margin-bottom:10px}
+    .bubble{background:var(--accent2); padding:8px 12px; border-radius:10px; font-weight:700}
+
+    .controls{display:flex; gap:8px; flex-wrap:wrap}
+    .btn{background:var(--accent); color:white; border:none; padding:8px 10px; border-radius:10px; font-weight:700; cursor:pointer; box-shadow:0 6px 0 rgba(0,0,0,0.06)}
+    .btn:active{transform:translateY(2px)}
+
+    .hud{display:flex; gap:10px; margin-top:8px;}
+    .hud .panel{background:#F6F6FF; padding:8px 10px; border-radius:10px; font-weight:700}
+
+    .touch-controls{display:none; margin-top:12px}
+    .dpad{width:180px; margin:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+    .dpad button{height:56px; font-size:18px}
+
+    /* make the layout adapt: canvas area grows, sidebar stays fixed */
+    .canvas-wrap{flex:1; display:flex; align-items:center; justify-content:center}
+
+    /* fullscreen adjustments */
+    :fullscreen .app, :-webkit-full-screen .app { height:100vh; }
+    :fullscreen .side, :-webkit-full-screen .side { display:block; }
+
+    /* modal */
+    .modal{position:fixed; left:0; top:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.35); z-index:9999}
+    .card{background:white; padding:16px; border-radius:12px; width:320px; max-width:92%;}
+    .question{font-size:20px; font-weight:800; text-align:center; margin-bottom:12px}
+    .answers{display:flex; gap:8px; flex-wrap:wrap; justify-content:center}
+    .ans{background:var(--accent); color:white; padding:8px 12px; border-radius:10px; min-width:70px; text-align:center; font-weight:800}
+
+    footer{margin-top:12px; font-size:12px; color:#666}
+
+    @media (max-width:860px){
+      #game-area{flex-direction:column}
+      .side{width:100%}
+      .touch-controls{display:block}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">⭐️</div>
+      <div>
+        <h1>Labirinto Matemágico</h1>
+        <div class="meta">Joguinhos de labirinto com somas e subtrações — para 6–7 anos</div>
+      </div>
+    </header>
+
+    <div class="board-card">
+      <div id="game-area">
+        <div class="canvas-wrap">
+          <div class="viewport" id="viewport">
+            <canvas id="canvas"></canvas>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="stat"><div class="bubble">Fase <span id="levelNum">1</span></div><div class="meta">Progresso</div></div>
+
+          <div class="hud">
+            <div class="panel">Pontuação: <span id="score">0</span></div>
+            <div class="panel">Acertos: <span id="correct">0</span></div>
+            <div class="panel">Errados: <span id="wrong">0</span></div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="controls">
+              <button class="btn" id="btnRestart">Reiniciar</button>
+              <button class="btn" id="btnNext">Próxima Fase</button>
+              <button class="btn" id="btnHint">Mostrar Dica</button>
+              <button class="btn" id="btnFullscreen">Tela Cheia</button>
+            </div>
+          </div>
+
+          <div class="touch-controls">
+            <div style="text-align:center; margin-top:8px">Controles (toque)</div>
+            <div class="dpad" style="margin-top:8px">
+              <div></div>
+              <button class="btn" data-dir="up">▲</button>
+              <div></div>
+              <button class="btn" data-dir="left">◀</button>
+              <div></div>
+              <button class="btn" data-dir="right">▶</button>
+              <div></div>
+              <button class="btn" data-dir="down">▼</button>
+              <div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <footer>
+        Dica: use o botão <strong>Tela Cheia</strong> no celular para esconder as barras do navegador (isso exige um toque do usuário).
+      </footer>
+    </div>
+  </div>
+
+  <!-- Modal template -->
+  <template id="modalTpl">
+    <div class="modal" id="modal">
+      <div class="card">
+        <div class="question" id="qText">Quanto é 2 + 3 ?</div>
+        <div class="answers" id="answers"></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    // --- Configuração (variáveis reativas) ---
+    let CELL = 64; // pixels por célula - será recalculado em resize
+    const MAX_TILE = 12;
+
+    // estado do jogo
+    const state = { rows:8, cols:8, maze:[], player:{r:0,c:0}, goal:{r:7,c:7}, questions:{}, score:0, correct:0, wrong:0, level:1 };
+
+    // canvas setup
+    const canvas = document.getElementById('canvas');
+    const viewport = document.getElementById('viewport');
+    const ctx = canvas.getContext('2d');
+
+    // UI refs
+    const scoreEl = document.getElementById('score');
+    const correctEl = document.getElementById('correct');
+    const wrongEl = document.getElementById('wrong');
+    const levelEl = document.getElementById('levelNum');
+
+    // --- util: grid ---
+    function makeEmptyGrid(r,c){
+      const grid = [];
+      for(let y=0;y<r;y++){
+        const row=[];
+        for(let x=0;x<c;x++){
+          row.push({visited:false, walls:[true,true,true,true]});
+        }
+        grid.push(row);
+      }
+      return grid;
+    }
+
+    function generateMaze(rows,cols){
+      const grid = makeEmptyGrid(rows,cols);
+      const stack = [];
+      let cx = 0, cy = 0;
+      grid[cy][cx].visited = true;
+      stack.push([cx,cy]);
+      const dirs = [ [0,-1],[1,0],[0,1],[-1,0] ];
+
+      while(stack.length){
+        const [x,y] = stack[stack.length-1];
+        const neighbors = [];
+        for(let i=0;i<4;i++){
+          const nx = x + dirs[i][0];
+          const ny = y + dirs[i][1];
+          if(nx>=0 && nx<cols && ny>=0 && ny<rows && !grid[ny][nx].visited){
+            neighbors.push([nx,ny,i]);
+          }
+        }
+        if(neighbors.length){
+          const [nx,ny,dirIdx] = neighbors[Math.floor(Math.random()*neighbors.length)];
+          grid[y][x].walls[dirIdx] = false;
+          grid[ny][nx].walls[(dirIdx+2)%4] = false;
+          grid[ny][nx].visited = true;
+          stack.push([nx,ny]);
+        } else {
+          stack.pop();
+        }
+      }
+      for(let y=0;y<rows;y++) for(let x=0;x<cols;x++) grid[y][x].visited=false;
+      return grid;
+    }
+
+    // --- questions placement ---
+    function placeQuestions(){
+      state.questions = {};
+      const total = Math.min(Math.max(3, Math.floor((state.rows*state.cols)/10)), Math.floor(state.rows*state.cols/6));
+      let placed = 0;
+      while(placed < total){
+        const r = Math.floor(Math.random()*state.rows);
+        const c = Math.floor(Math.random()*state.cols);
+        if((r===state.player.r && c===state.player.c) || (r===state.goal.r && c===state.goal.c)) continue;
+        const key = r+','+c;
+        if(state.questions[key]) continue;
+        const op = Math.random() < 0.6 ? '+' : '-';
+        let a,b;
+        if(op==='+'){
+          a = Math.floor(Math.random()*8) + 1; // 1..8
+          b = Math.floor(Math.random()*(9 - Math.min(a,2))) + 1; // keep sums <=12
+        } else {
+          a = Math.floor(Math.random()*12) + 1; // 1..12
+          b = Math.floor(Math.random()*a) + 0; // ensure non-negative
+        }
+        state.questions[key] = {a,b,op,got:false};
+        placed++;
+      }
+    }
+
+    // --- drawing ---
+    function draw(){
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0,0,w,h);
+      ctx.save();
+      ctx.fillStyle = '#E8F7FF';
+      ctx.fillRect(0,0,w,h);
+
+      for(let r=0;r<state.rows;r++){
+        for(let c=0;c<state.cols;c++){
+          const cell = state.maze[r][c];
+          const x = c * CELL, y = r * CELL;
+          ctx.strokeStyle = '#3E7CA2';
+          ctx.lineWidth = Math.max(2, Math.floor(CELL*0.06));
+          if(cell.walls[0]){ ctx.beginPath(); ctx.moveTo(x+6,y+2); ctx.lineTo(x+CELL-6,y+2); ctx.stroke(); }
+          if(cell.walls[1]){ ctx.beginPath(); ctx.moveTo(x+CELL-2,y+6); ctx.lineTo(x+CELL-2,y+CELL-6); ctx.stroke(); }
+          if(cell.walls[2]){ ctx.beginPath(); ctx.moveTo(x+6,y+CELL-2); ctx.lineTo(x+CELL-6,y+CELL-2); ctx.stroke(); }
+          if(cell.walls[3]){ ctx.beginPath(); ctx.moveTo(x+2,y+6); ctx.lineTo(x+2,y+CELL-6); ctx.stroke(); }
+
+          const key = r+','+c;
+          if(state.questions[key] && !state.questions[key].got){
+            ctx.fillStyle = '#FFD24D';
+            ctx.beginPath();
+            ctx.arc(x+CELL/2, y+CELL/2, Math.max(8, Math.floor(CELL*0.18)), 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#8A5A00';
+            ctx.font = `${Math.floor(CELL/3)}px sans-serif`;
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText('+', x+CELL/2, y+CELL/2+1);
+          }
+        }
+      }
+
+      // goal
+      ctx.fillStyle = '#B7F7C6';
+      ctx.fillRect(state.goal.c*CELL + CELL*0.14, state.goal.r*CELL + CELL*0.14, CELL*0.72, CELL*0.72);
+      ctx.fillStyle = '#006A3D'; ctx.font = `${Math.floor(CELL*0.3)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('🏁', state.goal.c*CELL + CELL/2, state.goal.r*CELL + CELL/2);
+
+      // player
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      const px = state.player.c*CELL + CELL/2, py = state.player.r*CELL + CELL/2;
+      ctx.arc(px,py, Math.min(28,CELL*0.36), 0, Math.PI*2);
+      ctx.fill();
+      ctx.font = `${Math.floor(CELL*0.4)}px sans-serif`;
+      ctx.fillText('🙂', px, py+2);
+
+      ctx.restore();
+    }
+
+    // --- movement ---
+    function canMove(r,c,dirIdx){
+      if(r<0||c<0||r>=state.rows||c>=state.cols) return false;
+      const cell = state.maze[r][c];
+      return !cell.walls[dirIdx];
+    }
+
+    function movePlayer(dir){
+      const mapping = {up:[-1,0,0], right:[0,1,1], down:[1,0,2], left:[0,-1,3]};
+      const [dr,dc,dirIdx] = mapping[dir];
+      const r = state.player.r, c = state.player.c;
+      if(canMove(r,c,dirIdx)){
+        state.player.r += dr; state.player.c += dc;
+        checkQuestion(); checkGoal(); draw();
+      } else {
+        // small feedback: flash player
+        draw();
+      }
+    }
+
+    // --- question modal ---
+    function openQuestion(r,c,q){
+      const tpl = document.getElementById('modalTpl');
+      const node = tpl.content.cloneNode(true);
+      const modal = node.querySelector('.modal');
+      const qText = modal.querySelector('#qText');
+      const answers = modal.querySelector('#answers');
+      const correct = q.op === '+' ? q.a + q.b : q.a - q.b;
+      qText.textContent = `Quanto é ${q.a} ${q.op} ${q.b}?`;
+      const choices = new Set(); choices.add(correct);
+      while(choices.size < 4){
+        let option = correct + (Math.floor(Math.random()*5)-2);
+        if(option<0) option = Math.abs(option)+1;
+        choices.add(option);
+      }
+      const arr = Array.from(choices).sort(()=>Math.random()-0.5);
+      arr.forEach(opt=>{
+        const b = document.createElement('button'); b.className='ans'; b.textContent=opt;
+        b.onclick = ()=>{
+          document.body.removeChild(modal);
+          if(opt === correct){ state.score += 10; state.correct += 1; state.questions[r+','+c].got = true; }
+          else { state.wrong += 1; state.score = Math.max(0, state.score - 4); }
+          updateUI(); draw();
+        }
+        answers.appendChild(b);
+      });
+      document.body.appendChild(modal);
+    }
+
+    function checkQuestion(){
+      const key = state.player.r+','+state.player.c;
+      const q = state.questions[key];
+      if(q && !q.got){ openQuestion(state.player.r, state.player.c, q); }
+    }
+
+    function checkGoal(){
+      if(state.player.r === state.goal.r && state.player.c === state.goal.c){
+        state.level += 1; state.score += 30; startLevel(state.level);
+      }
+    }
+
+    // --- UI updates ---
+    function updateUI(){ scoreEl.textContent = state.score; correctEl.textContent = state.correct; wrongEl.textContent = state.wrong; levelEl.textContent = state.level; }
+
+    // keyboard
+    document.addEventListener('keydown', e=>{
+      if(e.key==='ArrowUp') { e.preventDefault(); movePlayer('up'); }
+      if(e.key==='ArrowDown') { e.preventDefault(); movePlayer('down'); }
+      if(e.key==='ArrowLeft') { e.preventDefault(); movePlayer('left'); }
+      if(e.key==='ArrowRight') { e.preventDefault(); movePlayer('right'); }
+    });
+
+    // dpad: add click, pointer and touch handlers
+    document.querySelectorAll('[data-dir]').forEach(b=>{
+      b.addEventListener('click', ()=> movePlayer(b.dataset.dir));
+      b.addEventListener('pointerdown', e=>{ e.preventDefault(); movePlayer(b.dataset.dir); });
+      b.addEventListener('touchstart', e=>{ e.preventDefault(); movePlayer(b.dataset.dir); }, {passive:false});
+    });
+
+    // swipe on canvas (touch) and pointer (mouse/touch/pen)
+    let touchStartX=0, touchStartY=0, touchStartT=0;
+    canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY; touchStartT = Date.now(); }, {passive:false});
+    canvas.addEventListener('touchend', e=>{ const t = e.changedTouches[0]; handleSwipe(t.clientX, t.clientY); }, {passive:false});
+
+    canvas.addEventListener('pointerdown', e=>{ if(e.pointerType==='mouse') return; e.preventDefault(); touchStartX = e.clientX; touchStartY = e.clientY; touchStartT = Date.now(); });
+    canvas.addEventListener('pointerup', e=>{ if(e.pointerType==='mouse') return; handleSwipe(e.clientX, e.clientY); });
+
+    function handleSwipe(endX, endY){
+      const dx = endX - touchStartX; const dy = endY - touchStartY;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const threshold = Math.max(24, Math.min(window.innerWidth, window.innerHeight)*0.05);
+      if(adx < threshold && ady < threshold) return; // ignore small moves
+      if(adx > ady){ if(dx > 0) movePlayer('right'); else movePlayer('left'); }
+      else { if(dy > 0) movePlayer('down'); else movePlayer('up'); }
+    }
+
+    // buttons
+    document.getElementById('btnRestart').addEventListener('click', ()=>{ startLevel(1, true); });
+    document.getElementById('btnNext').addEventListener('click', ()=>{ startLevel(state.level+1); });
+    document.getElementById('btnHint').addEventListener('click', ()=>{ showHint(); });
+
+    // fullscreen
+    document.getElementById('btnFullscreen').addEventListener('click', async ()=>{
+      try{
+        if(!document.fullscreenElement){
+          await document.documentElement.requestFullscreen();
+        } else { await document.exitFullscreen(); }
+      } catch(err){ console.warn('Fullscreen API falhou:', err); }
+    });
+
+    document.addEventListener('fullscreenchange', ()=>{ resizeCanvasToFit(); });
+
+    function showHint(){
+      const path = bfsPath(state.player, state.goal);
+      if(!path) return alert('Não foi possível encontrar caminho.');
+      ctx.save();
+      for(let i=1;i<Math.min(path.length,6);i++){
+        const p = path[i];
+        ctx.fillStyle = 'rgba(255,120,120,0.9)';
+        ctx.beginPath(); ctx.arc(p.c*CELL + CELL/2, p.r*CELL + CELL/2, Math.max(6,Math.floor(CELL*0.12)),0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+      setTimeout(draw, 900);
+    }
+
+    // BFS pathfinder
+    function bfsPath(start, goal){
+      const q = [start];
+      const rows = state.rows, cols = state.cols;
+      const prev = Array.from({length:rows}, ()=>Array(cols).fill(null));
+      const seen = Array.from({length:rows}, ()=>Array(cols).fill(false));
+      seen[start.r][start.c] = true;
+      while(q.length){
+        const cur = q.shift();
+        if(cur.r === goal.r && cur.c === goal.c) break;
+        const r = cur.r, c = cur.c;
+        const dirs = [[-1,0,0],[0,1,1],[1,0,2],[0,-1,3]];
+        for(const [dr,dc,dirIdx] of dirs){
+          if(!state.maze[r][c].walls[dirIdx]){
+            const nr = r+dr, nc = c+dc;
+            if(nr>=0 && nc>=0 && nr<rows && nc<cols && !seen[nr][nc]){
+              seen[nr][nc] = true; prev[nr][nc] = {r,c}; q.push({r:nr,c:nc});
+            }
+          }
+        }
+      }
+      if(!seen[goal.r][goal.c]) return null;
+      const path = [];
+      let cur = {r:goal.r,c:goal.c};
+      while(cur){ path.push(cur); cur = prev[cur.r][cur.c]; }
+      path.reverse(); return path;
+    }
+
+    // responsive canvas sizing
+    function resizeCanvasToFit(){
+      // calculate available space: prefer larger side, subtract sidebar width unless in narrow layout
+      const isNarrow = window.matchMedia('(max-width:860px)').matches;
+      const availW = isNarrow ? window.innerWidth - 24 : Math.max(300, window.innerWidth - 340);
+      const availH = window.innerHeight - 120;
+      const size = Math.floor(Math.min(availW, availH));
+      const maxCells = Math.max(state.rows, state.cols);
+      CELL = Math.max(20, Math.floor(size / maxCells));
+      canvas.width = CELL * state.cols;
+      canvas.height = CELL * state.rows;
+      // make viewport adapt visually
+      viewport.style.width = canvas.width + 'px';
+      viewport.style.height = canvas.height + 'px';
+      draw();
+    }
+
+    window.addEventListener('resize', resizeCanvasToFit);
+
+    // --- start level ---
+    function startLevel(n, resetStats){
+      if(resetStats){ state.score = 0; state.correct = 0; state.wrong = 0; }
+      state.level = Math.max(1, n || 1);
+      const size = Math.min(MAX_TILE, 6 + Math.floor(state.level/2));
+      state.rows = size; state.cols = size;
+      state.player = {r:0,c:0}; state.goal = {r: state.rows-1, c: state.cols-1};
+      state.maze = generateMaze(state.rows, state.cols);
+      placeQuestions(); updateUI(); resizeCanvasToFit();
+    }
+
+    // init
+    startLevel(1);
+    updateUI(); draw();
+
+    // prevent page scroll while interacting with canvas on mobile
+    document.body.addEventListener('touchmove', function(e){ if(e.target === canvas) e.preventDefault(); }, {passive:false});
+
+  </script>
+</body>
+</html>
